@@ -1,6 +1,11 @@
 #include <metal_stdlib>
 using namespace metal;
 
+struct ScreenDimensions {
+    float width;
+    float height;
+};
+
 kernel void compute_main(
     // Example of a compute kernel parameter.
     // You can replace or remove this depending on your actual compute task.

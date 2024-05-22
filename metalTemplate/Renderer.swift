@@ -9,10 +9,16 @@ class Renderer: NSObject {
     var pipelineState: MTLRenderPipelineState!
     var computePipelineState: MTLComputePipelineState!
     var dimensionsBuffer: MTLBuffer?
+    var timeBuffer: MTLBuffer? 
+
 
     struct ScreenDimensions {
         var width: Float
         var height: Float
+    }
+    
+    struct Time {
+        var value: Float
     }
 
     init?(metalView: MTKView) {
@@ -38,6 +44,7 @@ class Renderer: NSObject {
         }
         
         updateScreenDimensions(metalView: metalView)
+        setupTimeBuffer()
         metalView.delegate = self
     }
 
@@ -79,16 +86,32 @@ class Renderer: NSObject {
         var dimensions = ScreenDimensions(width: Float(size.width), height: Float(size.height))
         dimensionsBuffer = device.makeBuffer(bytes: &dimensions, length: MemoryLayout<ScreenDimensions>.size, options: .storageModeShared)
     }
+    
+    private func setupTimeBuffer() {
+        var time = Time(value: 0)
+        timeBuffer = device.makeBuffer(bytes: &time, length: MemoryLayout<Time>.size, options: .storageModeShared)
+    }
+    
+    private func updateTimeBuffer() {
+        guard let timeBuffer = timeBuffer else { return }
+        
+        let currentTime = Float(CACurrentMediaTime())
+        var time = Time(value: currentTime)
+        memcpy(timeBuffer.contents(), &time, MemoryLayout<Time>.size)
+    }
 
     func performComputePass() {
         guard let commandBuffer = commandQueue.makeCommandBuffer(),
               let computeEncoder = commandBuffer.makeComputeCommandEncoder(),
-              let dimensionsBuffer = dimensionsBuffer else {
+              let dimensionsBuffer = dimensionsBuffer,
+              let timeBuffer = timeBuffer else {
             return
         }
 
         computeEncoder.setComputePipelineState(computePipelineState)
         computeEncoder.setBuffer(dimensionsBuffer, offset: 0, index: 0)
+        computeEncoder.setBuffer(timeBuffer, offset: 0, index: 1)
+
 
         // Dispatch compute commands (adjust parameters based on your compute kernel)
         // Example: computeEncoder.dispatchThreadgroups(threadgroupsPerGrid, threadsPerThreadgroup: threadsPerThreadgroup)
@@ -101,6 +124,8 @@ class Renderer: NSObject {
 extension Renderer: MTKViewDelegate {
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         updateScreenDimensions(metalView: view)
+        updateTimeBuffer() // Update the time buffer each frame
+        performComputePass()
     }
 
     func draw(in view: MTKView) {
